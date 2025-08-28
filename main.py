@@ -16,7 +16,7 @@ user32 = ctypes.windll.user32
 
 
 class System:
-    def __init__(self, browser: str = None, vortex: bool = False, verbose: bool = False, force_primary: bool = False):
+    def __init__(self, browser: str = None, vortex: bool = False, verbose: bool = False, force_primary: bool = False, window_title: str = None):
 
         logging.info("Initializing system")
         logging.info(f"Arguments: browser={browser}, vortex={vortex}, verbose={verbose}")
@@ -29,7 +29,7 @@ class System:
         logging.info(f"Found {len(self.monitors)} monitors")
         logging.info(f"Monitors: {self.monitors}")
 
-        self.vortex_btn, self.web_btn, self.click_btn, self.understood_btn, self.staging_btn = self._load_assets()
+        self.vortex_btn, self.web_btn, self.click_btn, self.understood_btn, self.staging_btn, self.wabbajack_btn = self._load_assets()
         logging.info("Loaded assets")
 
         # Check if there are displays left of the primary display which makes their coordinates negative
@@ -44,8 +44,8 @@ class System:
         logging.info(f"Biggest display: {self.biggest_display}")
         logging.info("Calculated offsets")
 
-        self.sift, self.vortex_desc, self.web_desc, self.click_desc, self.understood_desc, \
-        self.staging_desc, self.matcher = self._init_detector()
+        (self.sift, self.vortex_desc, self.web_desc, self.wabbajack_desc,
+         self.click_desc, self.understood_desc, self.staging_desc, self.matcher) = self._init_detector()
         logging.info("Initialized detector")
 
         self.screen, self.v_monitor = self._init_screen_capture()
@@ -55,6 +55,9 @@ class System:
         if vortex:
             self.prep_vortex()
 
+        if window_title:
+            self.prep_window_by_title(window_title)
+
         self.vortex = vortex
         self.verbose = verbose
 
@@ -62,17 +65,24 @@ class System:
         logging.info("Initializing detector")
         sift = cv2.SIFT_create()
 
-        _, vortex_descriptors = sift.detectAndCompute(self.vortex_btn, mask=None)
-        _, website_descriptors = sift.detectAndCompute(self.web_btn, mask=None)
-        _, click_descriptors = sift.detectAndCompute(self.click_btn, mask=None)
-        _, understood_descriptors = sift.detectAndCompute(self.understood_btn, mask=None)
-        _, staging_descriptors = sift.detectAndCompute(self.staging_btn, mask=None)
+        def desc(img):
+            g = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+            _, d = sift.detectAndCompute(g, mask=None)
+            return d
+
+        vortex_descriptors = desc(self.vortex_btn)
+        website_descriptors = desc(self.web_btn)
+        wabbajack_descriptors = desc(self.wabbajack_btn)
+        click_descriptors = desc(self.click_btn)
+        understood_descriptors = desc(self.understood_btn)
+        staging_descriptors = desc(self.staging_btn)
+
         logging.info("Initialized descriptors")
 
-        matcher = cv2.BFMatcher()
+        matcher = cv2.BFMatcher(cv2.NORM_L2, crossCheck=False)
 
-        return sift, vortex_descriptors, website_descriptors, click_descriptors, understood_descriptors, \
-               staging_descriptors, matcher
+        return (sift, vortex_descriptors, website_descriptors, wabbajack_descriptors,
+                click_descriptors, understood_descriptors, staging_descriptors, matcher)
 
     def _init_screen_capture(self) -> (mss.mss, dict):
         screen = mss.mss()
@@ -99,8 +109,9 @@ class System:
         click_path = "assets/ClickHereButton.png"
         understood_path = "assets/UnderstoodButton.png"
         staging_path = "assets/StagingButton.png"
+        wabbajack_path = "assets/WabbajackDownloadButton.png"
 
-        for path in [vortex_path, web_path, click_path, understood_path, staging_path]:
+        for path in [vortex_path, web_path, click_path, understood_path, staging_path, wabbajack_path]:
             if os.path.isfile(path):
                 yield cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB)
             else:
@@ -137,6 +148,48 @@ class System:
         point = np.median(points, axis=0)
         if not np.isnan(point).any():
             return self.img_coords_to_mon_coords(int(point[0]), int(point[1]))
+
+    def detect_improved(self, img, descriptors, min_matches=8, ratio=0.75, bbox=None):
+        # Crop if we have a bbox (expects [x1,y1,x2,y2] in *image* coords)
+        if bbox:
+            x1, y1, x2, y2 = map(int, bbox)
+            x1, y1 = max(0, x1), max(0, y1)
+            x2, y2 = min(img.shape[1], x2), min(img.shape[0], y2)
+            if x2 <= x1 or y2 <= y1:
+                logging.info("detect(): invalid bbox after clipping; skipping")
+                return None
+            img_cropped = img[y1:y2, x1:x2]
+        else:
+            img_cropped = img
+
+        # SIFT on grayscale for stability
+        gray = cv2.cvtColor(img_cropped, cv2.COLOR_RGB2GRAY)
+        kps, des = self.sift.detectAndCompute(gray, mask=None)
+        if des is None or len(kps) == 0:
+            logging.info("detect(): no keypoints in current frame region")
+            return None
+
+        # 2-NN + Lowe ratio test (canonical SIFT matching)
+        matches = self.matcher.knnMatch(descriptors, des, k=2)
+        good = []
+        for m, n in matches:
+            if m.distance < ratio * n.distance:
+                good.append(m)
+
+        if len(good) < min_matches:
+            logging.info(f"detect(): only {len(good)} good matches (<{min_matches})")
+            return None
+
+        pts = np.float32([kps[m.trainIdx].pt for m in good])
+        cx, cy = np.mean(pts, axis=0)  # safe now; pts not empty
+
+        # Back to full-image coords if we cropped
+        if bbox:
+            cx += x1
+            cy += y1
+
+        # Convert to monitor coords for clicking
+        return self.img_coords_to_mon_coords(int(cx), int(cy))
 
     @staticmethod
     def get_monitors() -> list[tuple[int, int, int, int]]:
@@ -201,6 +254,29 @@ class System:
             user32.ShowWindow(vortex, 3)
         logging.info("Moved vortex window")
 
+    def prep_window_by_title(self, title_substr: str):
+        handles = []
+
+        def _enum_cb(hwnd, _):
+            if win32gui.IsWindowVisible(hwnd):
+                t = win32gui.GetWindowText(hwnd)
+                if t and title_substr.lower() in t.lower():
+                    handles.append(hwnd)
+            return True
+
+        win32gui.EnumWindows(_enum_cb, None)
+        if not handles:
+            raise RuntimeError(f"No visible window contains title: {title_substr!r}")
+
+        h = handles[0]  # pick first match; refine if needed
+        logging.info(f"Found window '{win32gui.GetWindowText(h)}' for title match {title_substr!r}")
+
+        if len(self.monitors) > 1:
+            user32.ShowWindow(h, 1)
+            x, y, w, hgt = self.monitors[0]
+            win32gui.SetWindowPos(h, None, x, y, w, hgt, True)
+            user32.ShowWindow(h, 3)
+
     def scan(self):
         v_found = False
         w_found = False
@@ -221,27 +297,26 @@ class System:
                 vortex_bbox[0], vortex_bbox[1] = self.mon_coords_to_img_coords(vortex_bbox[0], vortex_bbox[1])
                 vortex_bbox[2], vortex_bbox[3] = self.mon_coords_to_img_coords(vortex_bbox[2], vortex_bbox[3])
 
-                vortex_loc = self.detect(img, self.vortex_desc, 100, vortex_bbox)
-                understood_btn_loc = self.detect(img, self.understood_desc, 80)
-                staging_btn_loc = self.detect(img, self.staging_desc, 80)
+                vortex_loc = self.detect_improved(img, self.vortex_desc, bbox=vortex_bbox)
+                understood_btn_loc = self.detect_improved(img, self.understood_desc, min_matches=6, ratio=0.75)
+                staging_btn_loc = self.detect_improved(img, self.staging_desc, min_matches=6, ratio=0.75)
 
                 if staging_btn_loc:
                     logging.info(f"Staging button found at {staging_btn_loc}. Clicking...")
-                    self.click(staging_btn_loc[0], staging_btn_loc[1])
+                    self.click(*staging_btn_loc);
                     time.sleep(1)
-
                 elif understood_btn_loc:
                     logging.info(f"Understood button found at {understood_btn_loc}. Clicking...")
-                    self.click(understood_btn_loc[0], understood_btn_loc[1])
+                    self.click(*understood_btn_loc);
                     time.sleep(1)
 
                 if vortex_loc:
                     logging.info(f"Found vortex button at {vortex_loc}")
-                    self.click(vortex_loc[0], vortex_loc[1])
+                    self.click(*vortex_loc)
                     v_found = True
 
             elif w_found:
-                click_loc = self.detect(img, self.click_desc, 80)
+                click_loc = self.detect_improved(img, self.click_desc, min_matches=6, ratio=0.75)
 
                 if click_loc:
                     logging.info(f"Found click button at {click_loc}")
@@ -250,19 +325,16 @@ class System:
                     time.sleep(3)
 
             elif v_found or not self.vortex:
-                web_loc = self.detect(img, self.web_desc, 100)
+                web_loc = self.detect_improved(img, self.wabbajack_desc, min_matches=6, ratio=0.75)
 
                 if web_loc:
-                    logging.info(f"Found web button at {web_loc}")
-                    self.click(web_loc[0], web_loc[1])
-
+                    logging.info(f"Found Wabbajack download button at {web_loc}")
+                    self.click(*web_loc)
                     web_loop = 0
-
                     if self.vortex:
                         w_found = True
-
                 elif web_loop > 5:
-                    logging.info("Web button not found. Restarting...")
+                    logging.info("Wabbajack button not found. Restarting...")
                     v_found = False
                     web_loop = 0
                 else:
@@ -279,9 +351,13 @@ class System:
 @click.option('--vortex', is_flag=True, default=False, help='Enables vortex mode')
 @click.option('--verbose', is_flag=True, default=False, help='Enables verbose mode')
 @click.option('--force-primary', is_flag=True, default=False, help='Forces the script to use the primary monitor')
-def main(browser, vortex, verbose, force_primary):
+@click.option('--window-title', is_flag=False, default=None,
+              help='Substring of an existing window title to position instead of launching a browser '
+                   '(e.g. "Wabbajack")')
+def main(browser, vortex, verbose, force_primary, window_title):
     assert browser in ["chrome", "firefox", None], f"Browser \'{browser}\' not supported"
-    assert browser and vortex or not browser and not vortex, "Browser and vortex must be used together"
+    assert (browser and vortex) or window_title or (not browser and not window_title), \
+        "Use --vortex with --browser or --window-title, or neither."
 
     if verbose:
         logging.basicConfig(level=logging.INFO, handlers=[
@@ -294,7 +370,7 @@ def main(browser, vortex, verbose, force_primary):
             logging.StreamHandler()
         ], format='[%(asctime)s - %(levelname)s]: %(message)s', level=logging.ERROR)
 
-    agent = System(browser, vortex, verbose, force_primary)
+    agent = System(browser, vortex, verbose, force_primary, window_title)
     agent.scan()
 
 
