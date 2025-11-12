@@ -10,6 +10,7 @@ from typing import Optional
 import click
 from loguru import logger
 
+from app import run as run_app
 from models import AppConfig, BrowserType
 from utils.platform import IS_WINDOWS
 
@@ -48,47 +49,6 @@ def setup_logging(verbose: bool) -> None:
             format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
             colorize=True
         )
-
-
-def run_scanner(config: AppConfig, simulate: bool) -> None:
-    """
-    Run the scanner with clean CLI output.
-
-    Args:
-        config: Application configuration
-        simulate: Force simulation mode regardless of host platform
-    """
-    logger.info("🚀 Starting NexusAutoDL")
-
-    run_in_simulation = simulate or not IS_WINDOWS
-
-    if run_in_simulation:
-        from utils.simulator import SimulatedScanner as Scanner, get_simulated_monitors
-
-        logger.warning("⚠️  SIMULATION MODE - No actual clicking will occur")
-        monitors = get_simulated_monitors()
-        logger.info(f"📺 Simulating {len(monitors)} monitor(s)")
-        scanner = Scanner(config)
-    else:
-        from services.window_manager import WindowManager
-        from services.scanner import Scanner
-
-        monitors = WindowManager.get_all_monitors()
-        logger.info(f"📺 Detected {len(monitors)} monitor(s)")
-        scanner = Scanner(config, monitors)
-
-    logger.info("🔍 Starting scan loop... (Ctrl+C to stop)")
-    logger.info("-" * 60)
-
-    try:
-        scanner.scan_loop()
-    except KeyboardInterrupt:
-        logger.info("")
-        logger.info("⏹️  Scan stopped by user")
-        logger.success(f"✅ Total clicks: {scanner.status.clicks_count}")
-    except Exception as exc:
-        logger.exception("❌ Scanner error: {}", exc)
-        raise
 
 
 @click.command()
@@ -211,7 +171,8 @@ def main(
     logger.debug(f"Configuration: {config}")
     
     # Run scanner
-    run_scanner(config, simulate=effective_simulation)
+    logger.info("🚀 Starting NexusAutoDL")
+    run_app(config, simulate=effective_simulation)
 
 
 if __name__ == "__main__":

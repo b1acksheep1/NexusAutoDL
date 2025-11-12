@@ -1,26 +1,30 @@
 """
 Main scanning orchestrator with state machine.
 """
+from __future__ import annotations
+
 import time
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Callable, Optional
 
-import cv2
 import numpy as np
 import numpy.typing as npt
 from loguru import logger
 
 from models import (
-    AppConfig, ScanStatus, ScanState, ButtonType, BoundingBox,
-    DetectionResult, Monitor
+    AppConfig,
+    BoundingBox,
+    ButtonType,
+    DetectionResult,
+    Monitor,
+    ScanState,
+    ScanStatus,
 )
-from services.screen_capture import ScreenCapture
 from services.button_detector import ButtonDetector
-from services.window_manager import WindowManager
 from services.click_controller import ClickController
-
-DEFAULT_DEBUG_WIDTH = 200
-DEFAULT_DEBUG_HEIGHT = 80
+from services.debug_recorder import DebugRecorder
+from services.screen_capture import ScreenCapture
+from services.window_manager import WindowManager
 
 
 class Scanner:
@@ -51,11 +55,8 @@ class Scanner:
         )
         self.window_manager = WindowManager(monitors)
         self.click_controller = ClickController()
-        self.debug_frame_dir: Optional[Path] = None
-        if self.config.debug_frame_dir:
-            self.debug_frame_dir = Path(self.config.debug_frame_dir)
-            self.debug_frame_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Debug frames will be saved to {self.debug_frame_dir}")
+        debug_path = Path(self.config.debug_frame_dir) if self.config.debug_frame_dir else None
+        self.debug_recorder = DebugRecorder(debug_path)
         
         # Initialize status
         self.status = ScanStatus(current_action="Initialized")
@@ -158,7 +159,7 @@ class Scanner:
                     self.status.state = ScanState.HANDLING_POPUP
                     self.status.current_action = action
                     self._update_status()
-                    self._record_debug_frame(
+                    self.debug_recorder.record(
                         img, detection, iteration, f"popup_{button_type.value}"
                     )
                     self._click_detection(detection)
@@ -176,7 +177,7 @@ class Scanner:
         if vortex_detection:
             self.status.current_action = "Clicking Vortex download button"
             self._update_status()
-            self._record_debug_frame(
+            self.debug_recorder.record(
                 img, vortex_detection, iteration, "vortex_download"
             )
             self._click_detection(vortex_detection)
@@ -214,7 +215,7 @@ class Scanner:
             if detection:
                 self.status.current_action = f"Clicking {label}"
                 self._update_status()
-                self._record_debug_frame(
+                self.debug_recorder.record(
                     img, detection, iteration, f"web_{button_type.value}"
                 )
                 self._click_detection(detection)
@@ -261,7 +262,7 @@ class Scanner:
         if click_detection:
             self.status.current_action = "Clicking dialog button"
             self._update_status()
-            self._record_debug_frame(
+            self.debug_recorder.record(
                 img, click_detection, iteration, "click_dialog"
             )
             self._click_detection(click_detection)
@@ -336,60 +337,3 @@ class Scanner:
             self.status.state = ScanState.ERROR
             self._update_status()
             raise
-
-    def _record_debug_frame(
-        self,
-        img: npt.NDArray[np.uint8],
-        detection: DetectionResult,
-        iteration: int,
-        label: str,
-    ) -> None:
-        """Overlay detection bounding box and save image if debugging enabled."""
-        if not self.debug_frame_dir:
-            return
-
-        annotated = img.copy()
-        self._draw_detection_box(annotated, detection, label)
-        filename = f"frame_{iteration:06d}_{label}.png"
-        output_path = self.debug_frame_dir / filename
-        cv2.imwrite(
-            str(output_path),
-            cv2.cvtColor(annotated, cv2.COLOR_RGB2BGR),
-        )
-        logger.debug(f"Wrote debug frame to {output_path}")
-
-    def _draw_detection_box(
-        self,
-        image: npt.NDArray[np.uint8],
-        detection: DetectionResult,
-        label: str,
-    ) -> None:
-        """Draw a bounding box and label for a detection."""
-        img_height, img_width = image.shape[:2]
-        box_width = detection.template_width or DEFAULT_DEBUG_WIDTH
-        box_height = detection.template_height or DEFAULT_DEBUG_HEIGHT
-        half_w = box_width // 2
-        half_h = box_height // 2
-
-        x1 = max(int(detection.x - half_w), 0)
-        y1 = max(int(detection.y - half_h), 0)
-        x2 = min(int(detection.x + half_w), img_width - 1)
-        y2 = min(int(detection.y + half_h), img_height - 1)
-
-        color = (0, 255, 0)
-        cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
-        text = (
-            f"{label} | {detection.button_type.value} | "
-            f"conf={detection.confidence:.2f} | matches={detection.num_matches}"
-        )
-        text_pos = (x1, max(15, y1 - 10))
-        cv2.putText(
-            image,
-            text,
-            text_pos,
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.45,
-            color,
-            1,
-            cv2.LINE_AA,
-        )

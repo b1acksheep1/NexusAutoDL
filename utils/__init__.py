@@ -1,12 +1,13 @@
 """Utilities for NexusAutoDL."""
+from utils.platform import IS_WINDOWS, user32, win32api, win32con, win32gui
 from utils.simulator import SimulatedScanner, get_simulated_monitors
-from utils.mock_win32 import win32api, win32gui, win32con, get_mock_user32
 
 __all__ = [
-    "SimulatedScanner",
-    "get_simulated_monitors",
+    "IS_WINDOWS",
+    "user32",
     "win32api",
     "win32gui",
     "win32con",
-    "get_mock_user32",
+    "SimulatedScanner",
+    "get_simulated_monitors",
 ]
