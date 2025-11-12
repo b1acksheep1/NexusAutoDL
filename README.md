@@ -40,6 +40,8 @@ MacOS/Linux:
 with Vortex. Can only be used in combination with --vortex. Currently
 supported browsers: “chrome”, “firefox”`
 - `--vortex: specifies use with Vortex mod manager`
+- `--legacy: use the legacy Nexus button templates and popup handling (staging/understood dialogs)`
+- `--debug-frame-dir <path>: write every screenshot that results in a detection to the given directory, annotated with bounding boxes`
 - `--verbose: prints verbose output`
 - `--force-primary: forces a system with multiple monitors to only be scanned on it’s primary display`
 

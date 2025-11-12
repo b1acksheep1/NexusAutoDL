@@ -1,0 +1,183 @@
+"""
+Window management for browser and Vortex positioning.
+"""
+import ctypes
+from loguru import logger
+import subprocess
+import time
+from typing import Optional
+
+import win32api
+import win32gui
+
+from models import BoundingBox, BrowserType, Monitor
+
+user32 = ctypes.windll.user32
+
+
+class WindowManager:
+    """Manages window positioning and browser launching."""
+
+    def __init__(self, monitors: list[Monitor]) -> None:
+        """
+        Initialize window manager.
+
+        Args:
+            monitors: List of available monitors
+        """
+        self.monitors = monitors
+        logger.info("Window manager initialized")
+
+    def launch_browser(self, browser: BrowserType) -> None:
+        """
+        Launch and position browser.
+
+        Args:
+            browser: Browser type to launch
+
+        Raises:
+            ValueError: If browser type not supported
+        """
+        commands = {
+            BrowserType.CHROME: r'start chrome about:blank',
+            BrowserType.FIREFOX: r'start firefox',
+        }
+        
+        window_names = {
+            BrowserType.CHROME: "about:blank - Google Chrome",
+            BrowserType.FIREFOX: "Mozilla Firefox",
+        }
+        
+        if browser not in commands:
+            raise ValueError(f"Browser '{browser}' not supported")
+
+        logger.info(f"Launching {browser.value}")
+        subprocess.Popen(commands[browser], shell=True)
+        time.sleep(0.4)
+        
+        window_name = window_names[browser]
+        h_browser = user32.FindWindowW(None, window_name)
+        
+        if h_browser == 0:
+            logger.warning(f"Could not find {browser.value} window")
+            return
+
+        if len(self.monitors) > 1:
+            primary = self.monitors[0]
+            user32.ShowWindow(h_browser, 1)  # SW_SHOWNORMAL
+            win32gui.SetWindowPos(
+                h_browser, None,
+                primary.x, primary.y,
+                primary.width, primary.height,
+                True
+            )
+            user32.ShowWindow(h_browser, 3)  # SW_MAXIMIZE
+            
+        logger.info(f"{browser.value} positioned successfully")
+
+    def position_vortex(self) -> None:
+        """Position Vortex window on secondary monitor."""
+        vortex_handle = user32.FindWindowW(None, "Vortex")
+        
+        if vortex_handle == 0:
+            logger.warning("Vortex window not found")
+            return
+
+        logger.info("Found Vortex window")
+        
+        if len(self.monitors) > 1:
+            secondary = self.monitors[1]
+            user32.ShowWindow(vortex_handle, 1)  # SW_SHOWNORMAL
+            win32gui.SetWindowPos(
+                vortex_handle, None,
+                secondary.x, secondary.y,
+                secondary.width, secondary.height,
+                True
+            )
+            user32.ShowWindow(vortex_handle, 3)  # SW_MAXIMIZE
+            
+        logger.info("Vortex positioned successfully")
+
+    def position_window_by_title(self, title_substr: str) -> None:
+        """
+        Position window matching title substring.
+
+        Args:
+            title_substr: Substring to match in window title
+
+        Raises:
+            RuntimeError: If no matching window found
+        """
+        handles = []
+
+        def enum_callback(hwnd: int, _) -> bool:
+            if win32gui.IsWindowVisible(hwnd):
+                title = win32gui.GetWindowText(hwnd)
+                if title and title_substr.lower() in title.lower():
+                    handles.append(hwnd)
+            return True
+
+        win32gui.EnumWindows(enum_callback, None)
+        
+        if not handles:
+            raise RuntimeError(f"No visible window contains title: {title_substr!r}")
+
+        handle = handles[0]
+        window_title = win32gui.GetWindowText(handle)
+        logger.info(f"Found window '{window_title}' matching '{title_substr}'")
+
+        if len(self.monitors) > 1:
+            primary = self.monitors[0]
+            user32.ShowWindow(handle, 1)
+            win32gui.SetWindowPos(
+                handle, None,
+                primary.x, primary.y,
+                primary.width, primary.height,
+                True
+            )
+            user32.ShowWindow(handle, 3)
+            
+        logger.info(f"Window '{window_title}' positioned")
+
+    def get_vortex_bbox(self) -> Optional[BoundingBox]:
+        """
+        Get Vortex window bounding box.
+
+        Returns:
+            BoundingBox if Vortex found, None otherwise
+        """
+        vortex_handle = user32.FindWindowW(None, "Vortex")
+        
+        if vortex_handle == 0:
+            logger.warning("Vortex window not found")
+            return None
+
+        rect = win32gui.GetWindowRect(vortex_handle)
+        bbox = BoundingBox(x1=rect[0], y1=rect[1], x2=rect[2], y2=rect[3])
+        
+        logger.debug(f"Vortex bbox: {bbox}")
+        return bbox
+
+    @staticmethod
+    def get_all_monitors() -> list[Monitor]:
+        """
+        Get all available monitors.
+
+        Returns:
+            List of Monitor objects
+        """
+        raw_monitors = win32api.EnumDisplayMonitors(None, None)
+        monitors = []
+        
+        for _, _, rect in raw_monitors:
+            x, y, right, bottom = rect
+            monitor = Monitor(
+                x=x,
+                y=y,
+                width=right - x,
+                height=bottom - y
+            )
+            monitors.append(monitor)
+        
+        logger.info(f"Found {len(monitors)} monitors: {monitors}")
+        return monitors
