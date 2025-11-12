@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-NexusAutoDL - Automated Nexusmods downloader
-Clean CLI with loguru logging
+NexusAutoDL - Automated Nexusmods downloader.
 """
+from __future__ import annotations
+
 import sys
 from typing import Optional
 
@@ -10,17 +11,7 @@ import click
 from loguru import logger
 
 from models import AppConfig, BrowserType
-
-# Check if we're on Windows or in simulation mode
-SIMULATE = '--simulate' in sys.argv or sys.platform != 'win32'
-
-if SIMULATE:
-    logger.info("🧪 Running in SIMULATION mode (non-Windows platform)")
-    from utils.simulator import SimulatedScanner as Scanner, get_simulated_monitors
-    WindowManager = None  # Not used in simulation
-else:
-    from services.window_manager import WindowManager
-    from services.scanner import Scanner
+from utils.platform import IS_WINDOWS
 
 
 def setup_logging(verbose: bool) -> None:
@@ -59,35 +50,44 @@ def setup_logging(verbose: bool) -> None:
         )
 
 
-def run_scanner(config: AppConfig) -> None:
+def run_scanner(config: AppConfig, simulate: bool) -> None:
     """
     Run the scanner with clean CLI output.
 
     Args:
         config: Application configuration
+        simulate: Force simulation mode regardless of host platform
     """
     logger.info("🚀 Starting NexusAutoDL")
-    
-    if SIMULATE:
+
+    run_in_simulation = simulate or not IS_WINDOWS
+
+    if run_in_simulation:
+        from utils.simulator import SimulatedScanner as Scanner, get_simulated_monitors
+
         logger.warning("⚠️  SIMULATION MODE - No actual clicking will occur")
         monitors = get_simulated_monitors()
+        logger.info(f"📺 Simulating {len(monitors)} monitor(s)")
         scanner = Scanner(config)
     else:
+        from services.window_manager import WindowManager
+        from services.scanner import Scanner
+
         monitors = WindowManager.get_all_monitors()
         logger.info(f"📺 Detected {len(monitors)} monitor(s)")
         scanner = Scanner(config, monitors)
-    
+
     logger.info("🔍 Starting scan loop... (Ctrl+C to stop)")
     logger.info("-" * 60)
-    
+
     try:
         scanner.scan_loop()
     except KeyboardInterrupt:
         logger.info("")
         logger.info("⏹️  Scan stopped by user")
         logger.success(f"✅ Total clicks: {scanner.status.clicks_count}")
-    except Exception as e:
-        logger.exception(f"❌ Scanner error: {e}")
+    except Exception as exc:
+        logger.exception("❌ Scanner error: {}", exc)
         raise
 
 
@@ -183,14 +183,16 @@ def main(
     # Setup logging first
     setup_logging(verbose)
     
-    # Show simulation warning
-    if simulate or sys.platform != 'win32':
-        logger.warning("⚠️  SIMULATION MODE ACTIVE")
-        logger.info("Running with fake data for testing. No actual clicking will occur.")
-    
     # Validate arguments
-    if browser and not vortex and not simulate:
+    effective_simulation = simulate or not IS_WINDOWS
+    host_supports_windows_features = IS_WINDOWS or simulate
+    if browser and not vortex and not effective_simulation:
         raise click.UsageError("--browser requires --vortex to be enabled")
+    if vortex and not host_supports_windows_features:
+        logger.warning(
+            "Vortex mode requested, but this platform lacks native win32 APIs. "
+            "Falling back to simulator."
+        )
     
     # Create configuration
     config = AppConfig(
@@ -209,7 +211,7 @@ def main(
     logger.debug(f"Configuration: {config}")
     
     # Run scanner
-    run_scanner(config)
+    run_scanner(config, simulate=effective_simulation)
 
 
 if __name__ == "__main__":

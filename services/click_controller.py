@@ -1,11 +1,13 @@
 """
 Mouse click control utilities.
 """
-from loguru import logger
+from __future__ import annotations
+
 import time
 
-import win32api
-import win32con
+from loguru import logger
+
+from utils.platform import IS_WINDOWS, win32api, win32con
 
 
 class ClickController:
@@ -19,6 +21,8 @@ class ClickController:
             restore_cursor: Whether to restore cursor position after clicking
         """
         self.restore_cursor = restore_cursor
+        if not IS_WINDOWS:
+            logger.debug("ClickController running with mock win32 bindings")
         logger.info("Click controller initialized")
 
     def click(self, x: int, y: int, delay: float = 0.1) -> None:
@@ -34,12 +38,12 @@ class ClickController:
 
         win32api.SetCursorPos((x, y))
         win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, x, y, 0, 0)
-        
+
         if delay > 0:
             time.sleep(delay)
-            
+
         win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, x, y, 0, 0)
-        
+
         logger.info(f"Clicked at ({x}, {y})")
 
         if self.restore_cursor and original_pos:
@@ -57,7 +61,7 @@ class ClickController:
         self.click(x, y, delay=delay)
         time.sleep(delay)
         self.click(x, y, delay=delay)
-        
+
         logger.info(f"Double-clicked at ({x}, {y})")
 
     def move_to(self, x: int, y: int) -> None:

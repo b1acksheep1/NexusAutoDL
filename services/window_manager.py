@@ -1,18 +1,16 @@
 """
 Window management for browser and Vortex positioning.
 """
-import ctypes
-from loguru import logger
+from __future__ import annotations
+
 import subprocess
 import time
 from typing import Optional
 
-import win32api
-import win32gui
+from loguru import logger
 
 from models import BoundingBox, BrowserType, Monitor
-
-user32 = ctypes.windll.user32
+from utils.platform import IS_WINDOWS, user32, win32api, win32gui
 
 
 class WindowManager:
@@ -25,6 +23,9 @@ class WindowManager:
         Args:
             monitors: List of available monitors
         """
+        if not IS_WINDOWS:
+            raise RuntimeError("WindowManager is only available on Windows hosts")
+
         self.monitors = monitors
         logger.info("Window manager initialized")
 
