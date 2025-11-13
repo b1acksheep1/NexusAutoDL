@@ -29,6 +29,7 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+VORTEX_WEB_RETRY_LIMIT = 3  # Attempts before falling back to Vortex search
 
 class Scanner:
     """Orchestrates the scanning and clicking process."""
@@ -207,7 +208,7 @@ class Scanner:
         self,
         img: npt.NDArray[np.uint8],
         iteration: int,
-    ) -> bool:
+    ) -> tuple[bool, bool]:
         """
         Handle web download button detection state.
 
@@ -215,7 +216,7 @@ class Scanner:
             img: Current screenshot
 
         Returns:
-            True if transitioning to next state
+            Tuple of (clicked_web_button, should_reset_to_vortex)
         """
         targets: list[tuple[ButtonType, str]] = [
             (ButtonType.WEBSITE, "website download button")
@@ -240,23 +241,39 @@ class Scanner:
                 )
                 self._click_detection(detection)
                 self.status.web_retry_count = 0
-                return True
+                return True, False
 
-        if self.status.web_retry_count >= self.config.wabbajack_retry_limit:
+        retry_limit = (
+            VORTEX_WEB_RETRY_LIMIT
+            if self.config.vortex
+            else self.config.wabbajack_retry_limit
+        )
+
+        if self.status.web_retry_count >= retry_limit:
+            if self.config.vortex:
+                logger.info(
+                    "Web button not found after %s attempts, returning to Vortex scan",
+                    retry_limit,
+                )
+                self.status.current_action = "Rechecking Vortex (web button missing)"
+                self.status.web_retry_count = 0
+                self._update_status()
+                return False, True
+
             logger.info("Web button not found, restarting...")
             self.status.current_action = "Restarting (button not found)"
             self.status.web_retry_count = 0
             self._update_status()
-            return False
+            return False, False
 
         self.status.web_retry_count += 1
         target_text = " or ".join(label for _, label in targets)
         self.status.current_action = (
             f"Searching for {target_text}... "
-            f"(attempt {self.status.web_retry_count}/{self.config.wabbajack_retry_limit})"
+            f"(attempt {self.status.web_retry_count}/{retry_limit})"
         )
         self._update_status()
-        return False
+        return False, False
 
     def _handle_click_dialog_state(
         self,
@@ -340,7 +357,16 @@ class Scanner:
 
                 elif vortex_found or not self.config.vortex:
                     self.status.state = ScanState.WAITING_FOR_WEB
-                    web_clicked = self._handle_web_state(img, iteration)
+                    web_clicked_result, reset_to_vortex = self._handle_web_state(
+                        img, iteration
+                    )
+                    if web_clicked_result:
+                        web_clicked = True
+                    if reset_to_vortex and self.config.vortex:
+                        vortex_found = False
+                        web_clicked = False
+                        self.status.state = ScanState.WAITING_FOR_VORTEX
+                        self._update_status()
                     if web_clicked and not self.config.vortex:
                         # Non-Vortex mode: reset immediately
                         vortex_found = False

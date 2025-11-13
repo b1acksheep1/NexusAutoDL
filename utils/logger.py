@@ -5,7 +5,12 @@ Central logger configuration helpers.
 from __future__ import annotations
 
 import sys
-from loguru import Logger, logger as _logger
+from typing import TYPE_CHECKING
+
+from loguru import logger as _logger
+
+if TYPE_CHECKING:
+    from loguru._logger import Logger
 
 
 def configure_logging(verbose: bool) -> None:
