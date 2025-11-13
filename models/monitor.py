@@ -1,9 +1,11 @@
 """Monitor configuration model."""
+
 from pydantic import BaseModel, Field
 
 
 class Monitor(BaseModel):
     """Monitor configuration."""
+
     x: int = Field(description="X coordinate of monitor")
     y: int = Field(description="Y coordinate of monitor")
     width: int = Field(gt=0, description="Width in pixels")

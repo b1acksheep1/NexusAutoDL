@@ -1,4 +1,5 @@
 """Detection result model."""
+
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -8,6 +9,7 @@ from models.button_type import ButtonType
 
 class DetectionResult(BaseModel):
     """Result of button detection."""
+
     button_type: ButtonType
     x: int
     y: int

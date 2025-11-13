@@ -1,6 +1,7 @@
 """
 Button detection using SIFT feature matching.
 """
+
 from pathlib import Path
 from typing import Optional
 
@@ -8,7 +9,13 @@ import cv2
 import numpy as np
 import numpy.typing as npt
 
-from models import ButtonAssets, ButtonType, BoundingBox, DetectionResult, TemplateCandidate
+from models import (
+    ButtonAssets,
+    ButtonType,
+    BoundingBox,
+    DetectionResult,
+    TemplateCandidate,
+)
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -32,11 +39,11 @@ class ButtonDetector:
         self.use_legacy_buttons = use_legacy_buttons
         self.sift = cv2.SIFT_create()
         self.matcher = cv2.BFMatcher(cv2.NORM_L2, crossCheck=False)
-        
+
         self.assets = self._load_assets()
         self._compute_descriptors()
         self._log_asset_mode()
-        
+
         logger.info("Button detector initialized")
 
     def _load_assets(self) -> ButtonAssets:
@@ -83,12 +90,15 @@ class ButtonDetector:
                 continue
             loaded_images[f"{key}_img"] = read_rgb(path)
             logger.debug(f"Loaded optional asset: {filename}")
-        
+
         return ButtonAssets(**loaded_images)
 
     def _compute_descriptors(self) -> None:
         """Compute SIFT descriptors for all assets."""
-        def compute_desc(img: npt.NDArray[np.uint8]) -> Optional[npt.NDArray[np.float32]]:
+
+        def compute_desc(
+            img: npt.NDArray[np.uint8],
+        ) -> Optional[npt.NDArray[np.float32]]:
             gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
             _, desc = self.sift.detectAndCompute(gray, mask=None)
             return desc
@@ -104,7 +114,7 @@ class ButtonDetector:
         self.assets.click_desc = compute_desc(self.assets.click_img)
         self.assets.understood_desc = compute_desc(self.assets.understood_img)
         self.assets.staging_desc = compute_desc(self.assets.staging_img)
-        
+
         logger.info("Computed descriptors for all assets")
 
     def _log_asset_mode(self) -> None:
@@ -133,8 +143,12 @@ class ButtonDetector:
         new_desc: Optional[npt.NDArray[np.float32]],
     ) -> list[TemplateCandidate]:
         """Return template candidate for selected mode if available."""
-        img: Optional[npt.NDArray[np.uint8]] = legacy_img if self.use_legacy_buttons else new_img
-        desc: Optional[npt.NDArray[np.float32]] = legacy_desc if self.use_legacy_buttons else new_desc
+        img: Optional[npt.NDArray[np.uint8]] = (
+            legacy_img if self.use_legacy_buttons else new_img
+        )
+        desc: Optional[npt.NDArray[np.float32]] = (
+            legacy_desc if self.use_legacy_buttons else new_desc
+        )
         candidate = self._make_candidate(img, desc)
         return [candidate] if candidate else []
 
@@ -171,7 +185,7 @@ class ButtonDetector:
         """Run descriptor matching for a single template."""
         matches: list[list[cv2.DMatch]] = self.matcher.knnMatch(template.desc, des, k=2)
         good_matches: list[cv2.DMatch] = []
-        
+
         for pair in matches:
             if len(pair) == 2:
                 m, n = pair
@@ -184,7 +198,9 @@ class ButtonDetector:
             )
             return None
 
-        pts: npt.NDArray[np.float32] = np.float32([kps[m.trainIdx].pt for m in good_matches])
+        pts: npt.NDArray[np.float32] = np.float32(
+            [kps[m.trainIdx].pt for m in good_matches]
+        )
         cx, cy = np.mean(pts, axis=0)
         cx += offset_x
         cy += offset_y
@@ -253,7 +269,7 @@ class ButtonDetector:
                 self.assets.staging_img, self.assets.staging_desc
             ),
         }
-        
+
         template_candidates = candidate_map[button_type]
         if not template_candidates:
             logger.warning(f"No descriptors for {button_type}")
@@ -263,24 +279,24 @@ class ButtonDetector:
         img_to_search: npt.NDArray[np.uint8] = img
         offset_x: int = 0
         offset_y: int = 0
-        
+
         if bbox:
             x1 = max(0, bbox.x1)
             y1 = max(0, bbox.y1)
             x2 = min(img.shape[1], bbox.x2)
             y2 = min(img.shape[0], bbox.y2)
-            
+
             if x2 <= x1 or y2 <= y1:
                 logger.debug(f"Invalid bbox for {button_type}: {bbox}")
                 return None
-            
+
             img_to_search = img[y1:y2, x1:x2]
             offset_x, offset_y = x1, y1
 
         # Convert to grayscale and compute keypoints
         gray = cv2.cvtColor(img_to_search, cv2.COLOR_RGB2GRAY)
         kps, des = self.sift.detectAndCompute(gray, mask=None)
-        
+
         if des is None or len(kps) == 0:
             logger.debug(f"No keypoints found for {button_type}")
             return None
@@ -301,10 +317,12 @@ class ButtonDetector:
                 best_result is None or result.num_matches > best_result.num_matches
             ):
                 best_result = result
-        
+
         if best_result is None:
-            logger.debug(f"{button_type}: no matches met the threshold across templates")
-        
+            logger.debug(
+                f"{button_type}: no matches met the threshold across templates"
+            )
+
         return best_result
 
     def detect_multiple(

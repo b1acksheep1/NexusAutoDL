@@ -1,6 +1,7 @@
 """
 Main scanning orchestrator with state machine.
 """
+
 from __future__ import annotations
 
 import time
@@ -25,6 +26,7 @@ from services.debug_recorder import DebugRecorder
 from services.screen_capture import ScreenCapture
 from services.window_manager import WindowManager
 from utils.logger import get_logger
+
 logger = get_logger(__name__)
 
 
@@ -48,23 +50,23 @@ class Scanner:
         self.config = config
         self.monitors = monitors
         self.status_callback = status_callback
-        
+
         # Initialize components
         self.screen_capture = ScreenCapture(monitors, config.force_primary)
-        self.button_detector = ButtonDetector(
-            use_legacy_buttons=self.config.legacy
-        )
+        self.button_detector = ButtonDetector(use_legacy_buttons=self.config.legacy)
         self.window_manager = WindowManager(monitors)
         self.click_controller = ClickController()
-        debug_path = Path(self.config.debug_frame_dir) if self.config.debug_frame_dir else None
+        debug_path = (
+            Path(self.config.debug_frame_dir) if self.config.debug_frame_dir else None
+        )
         self.debug_recorder = DebugRecorder(debug_path)
-        
+
         # Initialize status
         self.status = ScanStatus(current_action="Initialized")
-        
+
         # Setup windows if needed
         self._setup_windows()
-        
+
         logger.info("Scanner initialized")
 
     def _setup_windows(self) -> None:
@@ -74,15 +76,17 @@ class Scanner:
                 self.window_manager.launch_browser(self.config.browser)
                 self.status.current_action = f"Launched {self.config.browser.value}"
                 self._update_status()
-                
+
             if self.config.vortex:
                 self.window_manager.position_vortex()
                 self.status.current_action = "Positioned Vortex"
                 self._update_status()
-                
+
             if self.config.window_title:
                 self.window_manager.position_window_by_title(self.config.window_title)
-                self.status.current_action = f"Positioned window: {self.config.window_title}"
+                self.status.current_action = (
+                    f"Positioned window: {self.config.window_title}"
+                )
                 self._update_status()
         except Exception as e:
             error_msg = f"Window setup error: {e}"
@@ -108,7 +112,7 @@ class Scanner:
         mon_x, mon_y = self.screen_capture.img_coords_to_monitor_coords(
             detection.x, detection.y
         )
-        
+
         self.click_controller.click(mon_x, mon_y)
         self.status.clicks_count += 1
         self.status.detections.append(detection)
@@ -146,9 +150,9 @@ class Scanner:
         img_x2, img_y2 = self.screen_capture.monitor_coords_to_img_coords(
             vortex_bbox.x2, vortex_bbox.y2
         )
-        
+
         bbox: BoundingBox = BoundingBox(x1=img_x1, y1=img_y1, x2=img_x2, y2=img_y2)
-        
+
         # Calculate padding factor
         fac: float = 5 + (5 - vortex_bbox.x1 / 512)
         padded_bbox: BoundingBox = bbox.pad(1 / fac)
@@ -179,10 +183,11 @@ class Scanner:
 
         # Detect Vortex download button
         vortex_detection: Optional[DetectionResult] = self.button_detector.detect(
-            img, ButtonType.VORTEX,
+            img,
+            ButtonType.VORTEX,
             min_matches=self.config.min_matches,
             ratio=self.config.ratio_threshold,
-            bbox=padded_bbox
+            bbox=padded_bbox,
         )
 
         if vortex_detection:
@@ -273,17 +278,13 @@ class Scanner:
             return True
 
         click_detection: Optional[DetectionResult] = self.button_detector.detect(
-            img, ButtonType.CLICK,
-            min_matches=6,
-            ratio=self.config.ratio_threshold
+            img, ButtonType.CLICK, min_matches=6, ratio=self.config.ratio_threshold
         )
 
         if click_detection:
             self.status.current_action = "Clicking dialog button"
             self._update_status()
-            self.debug_recorder.record(
-                img, click_detection, iteration, "click_dialog"
-            )
+            self.debug_recorder.record(img, click_detection, iteration, "click_dialog")
             self._click_detection(click_detection)
             time.sleep(3)  # Wait for dialog to process
             return True
@@ -299,9 +300,13 @@ class Scanner:
         Args:
             max_iterations: Optional maximum iterations (for testing)
         """
-        self.status.state = ScanState.WAITING_FOR_VORTEX if self.config.vortex else ScanState.WAITING_FOR_WEB
+        self.status.state = (
+            ScanState.WAITING_FOR_VORTEX
+            if self.config.vortex
+            else ScanState.WAITING_FOR_WEB
+        )
         self._update_status()
-        
+
         vortex_found: bool = False
         web_clicked: bool = False
         iteration: int = 0

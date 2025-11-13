@@ -1,4 +1,5 @@
 """Services for NexusAutoDL."""
+
 from services.scanner import Scanner
 from services.button_detector import ButtonDetector
 from services.screen_capture import ScreenCapture

@@ -1,6 +1,7 @@
 """
 Pydantic models and enums for type-safe data structures.
 """
+
 from models.browser_type import BrowserType
 from models.button_type import ButtonType
 from models.scan_state import ScanState

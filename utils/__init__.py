@@ -1,4 +1,5 @@
 """Utilities for NexusAutoDL."""
+
 from utils.platform import IS_WINDOWS, user32, win32api, win32con, win32gui
 from utils.simulator import SimulatedScanner, get_simulated_monitors
 

@@ -1,9 +1,11 @@
 """Scan state enumeration."""
+
 from enum import Enum
 
 
 class ScanState(str, Enum):
     """Scanner state machine states."""
+
     IDLE = "idle"
     WAITING_FOR_VORTEX = "waiting_for_vortex"
     VORTEX_CLICKED = "vortex_clicked"

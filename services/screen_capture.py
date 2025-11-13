@@ -1,6 +1,7 @@
 """
 Screen capture and coordinate conversion utilities.
 """
+
 from loguru import logger
 
 import cv2
@@ -36,7 +37,7 @@ class ScreenCapture:
         self.min_y: int = self.v_monitor["top"]
         self.virtual_width: int = self.v_monitor["width"]
         self.virtual_height: int = self.v_monitor["height"]
-        
+
         logger.info(
             f"Initialized screen capture with {len(self.monitors)} app monitors "
             f"and capturing region {self.v_monitor}"

@@ -1,6 +1,7 @@
 """
 Debug frame recording utilities.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

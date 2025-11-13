@@ -1,6 +1,7 @@
 """
 Platform helpers for win32 APIs with graceful fallbacks on non-Windows hosts.
 """
+
 from __future__ import annotations
 
 import sys

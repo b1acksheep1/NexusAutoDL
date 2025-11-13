@@ -2,6 +2,7 @@
 """
 NexusAutoDL - Automated Nexusmods downloader.
 """
+
 from __future__ import annotations
 
 from typing import Optional
@@ -18,71 +19,59 @@ logger = get_logger(__name__)
 
 @click.command()
 @click.option(
-    '--browser',
-    type=click.Choice(['chrome', 'firefox'], case_sensitive=False),
+    "--browser",
+    type=click.Choice(["chrome", "firefox"], case_sensitive=False),
     default=None,
-    help='Browser to launch and position (requires --vortex)'
+    help="Browser to launch and position (requires --vortex)",
 )
 @click.option(
-    '--vortex',
+    "--vortex", is_flag=True, default=False, help="Enable Vortex mod manager mode"
+)
+@click.option(
+    "--legacy", is_flag=True, default=False, help="Use legacy button assets and dialogs"
+)
+@click.option("--verbose", is_flag=True, default=False, help="Enable verbose logging")
+@click.option(
+    "--force-primary",
     is_flag=True,
     default=False,
-    help='Enable Vortex mod manager mode'
+    help="Force scanning on primary monitor only",
 )
 @click.option(
-    '--legacy',
-    is_flag=True,
-    default=False,
-    help='Use legacy button assets and dialogs'
-)
-@click.option(
-    '--verbose',
-    is_flag=True,
-    default=False,
-    help='Enable verbose logging'
-)
-@click.option(
-    '--force-primary',
-    is_flag=True,
-    default=False,
-    help='Force scanning on primary monitor only'
-)
-@click.option(
-    '--window-title',
+    "--window-title",
     type=str,
     default=None,
-    help='Position window by title substring (e.g., "Wabbajack")'
+    help='Position window by title substring (e.g., "Wabbajack")',
 )
-
 @click.option(
-    '--min-matches',
+    "--min-matches",
     type=int,
     default=8,
-    help='Minimum SIFT matches for detection (default: 8)'
+    help="Minimum SIFT matches for detection (default: 8)",
 )
 @click.option(
-    '--ratio',
+    "--ratio",
     type=float,
     default=0.75,
-    help='Lowe ratio test threshold (default: 0.75)'
+    help="Lowe ratio test threshold (default: 0.75)",
 )
 @click.option(
-    '--click-delay',
+    "--click-delay",
     type=float,
     default=2.0,
-    help='Delay between scan iterations in seconds (default: 2.0)'
+    help="Delay between scan iterations in seconds (default: 2.0)",
 )
 @click.option(
-    '--simulate',
+    "--simulate",
     is_flag=True,
     default=False,
-    help='Run in simulation mode (no Windows required, generates fake data)'
+    help="Run in simulation mode (no Windows required, generates fake data)",
 )
 @click.option(
-    '--debug-frame-dir',
+    "--debug-frame-dir",
     type=click.Path(file_okay=False, dir_okay=True, writable=True, resolve_path=True),
     default=None,
-    help='Directory to store annotated debug screenshots (optional)'
+    help="Directory to store annotated debug screenshots (optional)",
 )
 def main(
     browser: Optional[str],
@@ -99,14 +88,14 @@ def main(
 ) -> None:
     """
     NexusAutoDL - Automated Nexusmods downloader.
-    
+
     Automatically detects and clicks download buttons on Nexusmods.
     Works with Vortex, Wabbajack, and other mod managers.
-    
+
     Use --simulate to test without Windows or actual button detection.
     """
     configure_logging(verbose)
-    
+
     # Validate arguments
     effective_simulation: bool = simulate or not IS_WINDOWS
     host_supports_windows_features: bool = IS_WINDOWS or simulate
@@ -117,7 +106,7 @@ def main(
             "Vortex mode requested, but this platform lacks native win32 APIs. "
             "Falling back to simulator."
         )
-    
+
     # Create configuration
     config = AppConfig(
         browser=BrowserType(browser.lower()) if browser else None,
@@ -131,9 +120,9 @@ def main(
         ratio_threshold=ratio,
         click_delay=click_delay,
     )
-    
+
     logger.debug(f"Configuration: {config}")
-    
+
     # Run scanner
     logger.info("🚀 Starting NexusAutoDL")
     run_app(config, simulate=effective_simulation)
