@@ -25,7 +25,8 @@ class ScreenCapture:
         if not monitors:
             raise ValueError("No monitors provided to ScreenCapture")
 
-        self.monitors: list[Monitor] = sorted(monitors, key=lambda m: (m.x, m.y))
+        # Preserve OS-reported ordering so index 0 remains the real primary display
+        self.monitors: list[Monitor] = list(monitors)
         self.screen: mss.mss = mss.mss()
         self.screen_monitors: list[dict[str, int]] = self.screen.monitors
         self.force_primary = force_primary
@@ -44,13 +45,7 @@ class ScreenCapture:
     def _determine_capture_region(self) -> dict[str, int]:
         """Select the monitor region to capture."""
         if self.force_primary or len(self.screen_monitors) <= 1:
-            primary: Monitor = self.monitors[0]
-            return {
-                "top": primary.y,
-                "left": primary.x,
-                "width": primary.width,
-                "height": primary.height,
-            }
+            return self._get_primary_monitor_bounds()
 
         # screen.monitors[0] is already the full virtual desktop
         full_virtual: dict[str, int] = self.screen_monitors[0]
@@ -59,6 +54,64 @@ class ScreenCapture:
             "left": full_virtual["left"],
             "width": full_virtual["width"],
             "height": full_virtual["height"],
+        }
+
+    def _get_primary_monitor_bounds(self) -> dict[str, int]:
+        """Resolve primary monitor bounds using MSS data for DPI-safe capture."""
+        primary_monitor: Monitor = self.monitors[0]
+        matched_monitor = self._match_monitor_to_mss(primary_monitor)
+
+        if matched_monitor:
+            return matched_monitor
+
+        logger.warning(
+            "Falling back to app monitor geometry for primary capture (MSS match failed)"
+        )
+        return {
+            "top": primary_monitor.y,
+            "left": primary_monitor.x,
+            "width": primary_monitor.width,
+            "height": primary_monitor.height,
+        }
+
+    def _match_monitor_to_mss(self, target: Monitor | None) -> dict[str, int] | None:
+        """
+        Match an app-level Monitor definition to the closest MSS monitor entry.
+
+        This keeps capture dimensions aligned with what MSS expects even when DPI
+        scaling causes win32-reported bounds to differ from raw framebuffer pixels.
+        """
+        if not self.screen_monitors:
+            return None
+
+        # MSS returns index 0 as the virtual desktop and remainder per monitor
+        physical_monitors = (
+            self.screen_monitors[1:]
+            if len(self.screen_monitors) > 1
+            else self.screen_monitors
+        )
+
+        if not physical_monitors:
+            return None
+
+        if target is None:
+            match = physical_monitors[0]
+        else:
+            match = min(
+                physical_monitors,
+                key=lambda m: (
+                    abs(m["left"] - target.x)
+                    + abs(m["top"] - target.y)
+                    + abs(m["width"] - target.width)
+                    + abs(m["height"] - target.height)
+                ),
+            )
+
+        return {
+            "top": match["top"],
+            "left": match["left"],
+            "width": match["width"],
+            "height": match["height"],
         }
 
     def capture(self) -> npt.NDArray[np.uint8]:
