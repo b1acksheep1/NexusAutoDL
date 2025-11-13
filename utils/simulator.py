@@ -6,7 +6,7 @@ import asyncio
 from loguru import logger
 import random
 import time
-from typing import Optional
+from typing import Callable, Optional
 
 from models import (
     AppConfig, ScanStatus, ScanState, ButtonType,
@@ -17,7 +17,11 @@ from models import (
 class SimulatedScanner:
     """Simulates the scanner with fake detections."""
     
-    def __init__(self, config: AppConfig, status_callback: Optional[callable] = None):
+    def __init__(
+        self,
+        config: AppConfig,
+        status_callback: Optional[Callable[[ScanStatus], None]] = None,
+    ):
         """Initialize simulator."""
         self.config = config
         self.status_callback = status_callback

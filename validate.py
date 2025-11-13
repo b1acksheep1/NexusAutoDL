@@ -15,18 +15,21 @@ def validate_imports() -> List[str]:
     
     # Core modules
     try:
+        import models  # noqa: F401
         print("✓ models")
     except Exception as e:
         errors.append(f"models: {e}")
         print(f"✗ models: {e}")
     
     try:
+        import services  # noqa: F401
         print("✓ services")
     except Exception as e:
         errors.append(f"services: {e}")
         print(f"✗ services: {e}")
     
     try:
+        import utils  # noqa: F401
         print("✓ utils")
     except Exception as e:
         errors.append(f"utils: {e}")

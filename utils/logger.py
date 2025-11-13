@@ -4,7 +4,7 @@ Central logger configuration helpers.
 from __future__ import annotations
 
 import sys
-from loguru import logger as _logger
+from loguru import Logger, logger as _logger
 
 
 def configure_logging(verbose: bool) -> None:
@@ -31,7 +31,7 @@ def configure_logging(verbose: bool) -> None:
     )
 
 
-def get_logger(name: str):
+def get_logger(name: str) -> Logger:
     """Return module-scoped logger."""
     return _logger
 

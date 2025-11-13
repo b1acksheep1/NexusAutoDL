@@ -5,8 +5,6 @@ from __future__ import annotations
 
 import time
 
-from loguru import logger
-
 from utils.platform import IS_WINDOWS, win32api, win32con
 from utils.logger import get_logger
 
