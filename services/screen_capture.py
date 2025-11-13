@@ -25,16 +25,16 @@ class ScreenCapture:
         if not monitors:
             raise ValueError("No monitors provided to ScreenCapture")
 
-        self.monitors = sorted(monitors, key=lambda m: (m.x, m.y))
-        self.screen = mss.mss()
-        self.screen_monitors = self.screen.monitors
+        self.monitors: list[Monitor] = sorted(monitors, key=lambda m: (m.x, m.y))
+        self.screen: mss.mss = mss.mss()
+        self.screen_monitors: list[dict[str, int]] = self.screen.monitors
         self.force_primary = force_primary
 
-        self.v_monitor = self._determine_capture_region()
-        self.min_x = self.v_monitor["left"]
-        self.min_y = self.v_monitor["top"]
-        self.virtual_width = self.v_monitor["width"]
-        self.virtual_height = self.v_monitor["height"]
+        self.v_monitor: dict[str, int] = self._determine_capture_region()
+        self.min_x: int = self.v_monitor["left"]
+        self.min_y: int = self.v_monitor["top"]
+        self.virtual_width: int = self.v_monitor["width"]
+        self.virtual_height: int = self.v_monitor["height"]
         
         logger.info(
             f"Initialized screen capture with {len(self.monitors)} app monitors "
@@ -44,7 +44,7 @@ class ScreenCapture:
     def _determine_capture_region(self) -> dict[str, int]:
         """Select the monitor region to capture."""
         if self.force_primary or len(self.screen_monitors) <= 1:
-            primary = self.monitors[0]
+            primary: Monitor = self.monitors[0]
             return {
                 "top": primary.y,
                 "left": primary.x,
@@ -53,7 +53,7 @@ class ScreenCapture:
             }
 
         # screen.monitors[0] is already the full virtual desktop
-        full_virtual = self.screen_monitors[0]
+        full_virtual: dict[str, int] = self.screen_monitors[0]
         return {
             "top": full_virtual["top"],
             "left": full_virtual["left"],
@@ -68,7 +68,7 @@ class ScreenCapture:
         Returns:
             RGB image array
         """
-        img = np.array(self.screen.grab(self.v_monitor))
+        img: npt.NDArray[np.uint8] = np.array(self.screen.grab(self.v_monitor))
         logger.debug("Screen captured")
         return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 

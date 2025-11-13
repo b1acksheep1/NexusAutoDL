@@ -7,10 +7,11 @@ import subprocess
 import time
 from typing import Optional
 
-from loguru import logger
-
 from models import BoundingBox, BrowserType, Monitor
 from utils.platform import IS_WINDOWS, user32, win32api, win32gui
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class WindowManager:
@@ -26,7 +27,7 @@ class WindowManager:
         if not IS_WINDOWS:
             raise RuntimeError("WindowManager is only available on Windows hosts")
 
-        self.monitors = monitors
+        self.monitors: list[Monitor] = monitors
         logger.info("Window manager initialized")
 
     def launch_browser(self, browser: BrowserType) -> None:
@@ -39,12 +40,12 @@ class WindowManager:
         Raises:
             ValueError: If browser type not supported
         """
-        commands = {
+        commands: dict[BrowserType, str] = {
             BrowserType.CHROME: r'start chrome about:blank',
             BrowserType.FIREFOX: r'start firefox',
         }
         
-        window_names = {
+        window_names: dict[BrowserType, str] = {
             BrowserType.CHROME: "about:blank - Google Chrome",
             BrowserType.FIREFOX: "Mozilla Firefox",
         }
@@ -56,15 +57,15 @@ class WindowManager:
         subprocess.Popen(commands[browser], shell=True)
         time.sleep(0.4)
         
-        window_name = window_names[browser]
-        h_browser = user32.FindWindowW(None, window_name)
+        window_name: str = window_names[browser]
+        h_browser: int = user32.FindWindowW(None, window_name)
         
         if h_browser == 0:
             logger.warning(f"Could not find {browser.value} window")
             return
 
         if len(self.monitors) > 1:
-            primary = self.monitors[0]
+            primary: Monitor = self.monitors[0]
             user32.ShowWindow(h_browser, 1)  # SW_SHOWNORMAL
             win32gui.SetWindowPos(
                 h_browser, None,
@@ -78,7 +79,7 @@ class WindowManager:
 
     def position_vortex(self) -> None:
         """Position Vortex window on secondary monitor."""
-        vortex_handle = user32.FindWindowW(None, "Vortex")
+        vortex_handle: int = user32.FindWindowW(None, "Vortex")
         
         if vortex_handle == 0:
             logger.warning("Vortex window not found")
@@ -87,7 +88,7 @@ class WindowManager:
         logger.info("Found Vortex window")
         
         if len(self.monitors) > 1:
-            secondary = self.monitors[1]
+            secondary: Monitor = self.monitors[1]
             user32.ShowWindow(vortex_handle, 1)  # SW_SHOWNORMAL
             win32gui.SetWindowPos(
                 vortex_handle, None,
@@ -109,7 +110,7 @@ class WindowManager:
         Raises:
             RuntimeError: If no matching window found
         """
-        handles = []
+        handles: list[int] = []
 
         def enum_callback(hwnd: int, _) -> bool:
             if win32gui.IsWindowVisible(hwnd):
@@ -123,8 +124,8 @@ class WindowManager:
         if not handles:
             raise RuntimeError(f"No visible window contains title: {title_substr!r}")
 
-        handle = handles[0]
-        window_title = win32gui.GetWindowText(handle)
+        handle: int = handles[0]
+        window_title: str = win32gui.GetWindowText(handle)
         logger.info(f"Found window '{window_title}' matching '{title_substr}'")
 
         if len(self.monitors) > 1:
@@ -147,7 +148,7 @@ class WindowManager:
         Returns:
             BoundingBox if Vortex found, None otherwise
         """
-        vortex_handle = user32.FindWindowW(None, "Vortex")
+        vortex_handle: int = user32.FindWindowW(None, "Vortex")
         
         if vortex_handle == 0:
             logger.warning("Vortex window not found")
@@ -168,7 +169,7 @@ class WindowManager:
             List of Monitor objects
         """
         raw_monitors = win32api.EnumDisplayMonitors(None, None)
-        monitors = []
+        monitors: list[Monitor] = []
         
         for _, _, rect in raw_monitors:
             x, y, right, bottom = rect

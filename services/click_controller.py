@@ -8,6 +8,9 @@ import time
 from loguru import logger
 
 from utils.platform import IS_WINDOWS, win32api, win32con
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class ClickController:
@@ -20,7 +23,7 @@ class ClickController:
         Args:
             restore_cursor: Whether to restore cursor position after clicking
         """
-        self.restore_cursor = restore_cursor
+        self.restore_cursor: bool = restore_cursor
         if not IS_WINDOWS:
             logger.debug("ClickController running with mock win32 bindings")
         logger.info("Click controller initialized")
@@ -34,7 +37,9 @@ class ClickController:
             y: Y coordinate
             delay: Delay between mouse down and up
         """
-        original_pos = win32api.GetCursorPos() if self.restore_cursor else None
+        original_pos: tuple[int, int] | None = (
+            win32api.GetCursorPos() if self.restore_cursor else None
+        )
 
         win32api.SetCursorPos((x, y))
         win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, x, y, 0, 0)

@@ -10,6 +10,7 @@ from models.detection_result import DetectionResult
 from models.button_assets import ButtonAssets
 from models.app_config import AppConfig
 from models.scan_status import ScanStatus
+from models.template_candidate import TemplateCandidate
 
 __all__ = [
     "BrowserType",
@@ -21,4 +22,5 @@ __all__ = [
     "ButtonAssets",
     "AppConfig",
     "ScanStatus",
+    "TemplateCandidate",
 ]

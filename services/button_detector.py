@@ -1,24 +1,17 @@
 """
 Button detection using SIFT feature matching.
 """
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 import cv2
 import numpy as np
 import numpy.typing as npt
-from loguru import logger
 
-from models import ButtonAssets, ButtonType, BoundingBox, DetectionResult
+from models import ButtonAssets, ButtonType, BoundingBox, DetectionResult, TemplateCandidate
+from utils.logger import get_logger
 
-
-@dataclass(frozen=True)
-class TemplateCandidate:
-    """Descriptor metadata for drawing debug info."""
-    desc: npt.NDArray[np.float32]
-    width: int
-    height: int
+logger = get_logger(__name__)
 
 
 class ButtonDetector:
@@ -56,7 +49,7 @@ class ButtonDetector:
         Raises:
             FileNotFoundError: If any asset file is missing
         """
-        required_assets = {
+        required_assets: dict[str, str] = {
             "vortex": "VortexDownloadButton.png",
             "web": "WebsiteDownloadButton.png",
             "wabbajack": "WabbajackDownloadButton.png",
@@ -64,7 +57,7 @@ class ButtonDetector:
             "understood": "UnderstoodButton.png",
             "staging": "StagingButton.png",
         }
-        optional_assets = {
+        optional_assets: dict[str, str] = {
             "vortex_new": "VortexDownloadButtonNew.png",
             "web_new": "WebsiteDownloadButtonNew.png",
         }
@@ -75,9 +68,9 @@ class ButtonDetector:
                 raise ValueError(f"Failed to load image: {path}")
             return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-        loaded_images = {}
+        loaded_images: dict[str, npt.NDArray[np.uint8]] = {}
         for key, filename in required_assets.items():
-            path = self.assets_path / filename
+            path: Path = self.assets_path / filename
             if not path.exists():
                 raise FileNotFoundError(f"Asset not found: {path}")
             loaded_images[f"{key}_img"] = read_rgb(path)
@@ -140,8 +133,8 @@ class ButtonDetector:
         new_desc: Optional[npt.NDArray[np.float32]],
     ) -> list[TemplateCandidate]:
         """Return template candidate for selected mode if available."""
-        img = legacy_img if self.use_legacy_buttons else new_img
-        desc = legacy_desc if self.use_legacy_buttons else new_desc
+        img: Optional[npt.NDArray[np.uint8]] = legacy_img if self.use_legacy_buttons else new_img
+        desc: Optional[npt.NDArray[np.float32]] = legacy_desc if self.use_legacy_buttons else new_desc
         candidate = self._make_candidate(img, desc)
         return [candidate] if candidate else []
 
@@ -162,7 +155,7 @@ class ButtonDetector:
         if img is None or desc is None:
             return None
         height, width = img.shape[:2]
-        return TemplateCandidate(desc=desc, width=width, height=height)
+        return TemplateCandidate(desc=desc, width=int(width), height=int(height))
 
     def _match_template(
         self,
@@ -176,8 +169,8 @@ class ButtonDetector:
         offset_y: int,
     ) -> Optional[DetectionResult]:
         """Run descriptor matching for a single template."""
-        matches = self.matcher.knnMatch(template.desc, des, k=2)
-        good_matches = []
+        matches: list[list[cv2.DMatch]] = self.matcher.knnMatch(template.desc, des, k=2)
+        good_matches: list[cv2.DMatch] = []
         
         for pair in matches:
             if len(pair) == 2:
@@ -191,7 +184,7 @@ class ButtonDetector:
             )
             return None
 
-        pts = np.float32([kps[m.trainIdx].pt for m in good_matches])
+        pts: npt.NDArray[np.float32] = np.float32([kps[m.trainIdx].pt for m in good_matches])
         cx, cy = np.mean(pts, axis=0)
         cx += offset_x
         cy += offset_y
@@ -267,8 +260,9 @@ class ButtonDetector:
             return None
 
         # Crop to bbox if provided
-        img_to_search = img
-        offset_x, offset_y = 0, 0
+        img_to_search: npt.NDArray[np.uint8] = img
+        offset_x: int = 0
+        offset_y: int = 0
         
         if bbox:
             x1 = max(0, bbox.x1)
@@ -293,7 +287,7 @@ class ButtonDetector:
 
         best_result: Optional[DetectionResult] = None
         for template in template_candidates:
-            result = self._match_template(
+            result: Optional[DetectionResult] = self._match_template(
                 template,
                 kps,
                 des,

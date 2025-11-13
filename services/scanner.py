@@ -9,7 +9,6 @@ from typing import Callable, Optional
 
 import numpy as np
 import numpy.typing as npt
-from loguru import logger
 
 from models import (
     AppConfig,
@@ -25,6 +24,8 @@ from services.click_controller import ClickController
 from services.debug_recorder import DebugRecorder
 from services.screen_capture import ScreenCapture
 from services.window_manager import WindowManager
+from utils.logger import get_logger
+logger = get_logger(__name__)
 
 
 class Scanner:
@@ -102,6 +103,8 @@ class Scanner:
             detection: Detection to click
         """
         # Convert image coords to monitor coords
+        mon_x: int
+        mon_y: int
         mon_x, mon_y = self.screen_capture.img_coords_to_monitor_coords(
             detection.x, detection.y
         )
@@ -111,7 +114,11 @@ class Scanner:
         self.status.detections.append(detection)
         self._update_status()
 
-    def _handle_vortex_state(self, img, iteration: int) -> bool:
+    def _handle_vortex_state(
+        self,
+        img: npt.NDArray[np.uint8],
+        iteration: int,
+    ) -> bool:
         """
         Handle Vortex button detection state.
 
@@ -129,27 +136,31 @@ class Scanner:
             return False
 
         # Convert to image coordinates and pad
+        img_x1: int
+        img_y1: int
         img_x1, img_y1 = self.screen_capture.monitor_coords_to_img_coords(
             vortex_bbox.x1, vortex_bbox.y1
         )
+        img_x2: int
+        img_y2: int
         img_x2, img_y2 = self.screen_capture.monitor_coords_to_img_coords(
             vortex_bbox.x2, vortex_bbox.y2
         )
         
-        bbox = BoundingBox(x1=img_x1, y1=img_y1, x2=img_x2, y2=img_y2)
+        bbox: BoundingBox = BoundingBox(x1=img_x1, y1=img_y1, x2=img_x2, y2=img_y2)
         
         # Calculate padding factor
-        fac = 5 + (5 - vortex_bbox.x1 / 512)
-        padded_bbox = bbox.pad(1 / fac)
+        fac: float = 5 + (5 - vortex_bbox.x1 / 512)
+        padded_bbox: BoundingBox = bbox.pad(1 / fac)
 
         # Check for popup dialogs first (legacy workflow only)
         if self.config.legacy:
-            popup_buttons = [
+            popup_buttons: list[tuple[ButtonType, str]] = [
                 (ButtonType.UNDERSTOOD, "Clicking 'Understood' button"),
                 (ButtonType.STAGING, "Clicking 'Staging' button"),
             ]
             for button_type, action in popup_buttons:
-                detection = self.button_detector.detect(
+                detection: Optional[DetectionResult] = self.button_detector.detect(
                     img,
                     button_type,
                     min_matches=6,
@@ -167,7 +178,7 @@ class Scanner:
                     return False
 
         # Detect Vortex download button
-        vortex_detection = self.button_detector.detect(
+        vortex_detection: Optional[DetectionResult] = self.button_detector.detect(
             img, ButtonType.VORTEX,
             min_matches=self.config.min_matches,
             ratio=self.config.ratio_threshold,
@@ -187,7 +198,11 @@ class Scanner:
         self._update_status()
         return False
 
-    def _handle_web_state(self, img, iteration: int) -> bool:
+    def _handle_web_state(
+        self,
+        img: npt.NDArray[np.uint8],
+        iteration: int,
+    ) -> bool:
         """
         Handle web download button detection state.
 
@@ -205,7 +220,7 @@ class Scanner:
             targets.append((ButtonType.WABBAJACK, "Wabbajack download button"))
 
         for button_type, label in targets:
-            detection = self.button_detector.detect(
+            detection: Optional[DetectionResult] = self.button_detector.detect(
                 img,
                 button_type,
                 min_matches=6,
@@ -238,7 +253,11 @@ class Scanner:
         self._update_status()
         return False
 
-    def _handle_click_dialog_state(self, img, iteration: int) -> bool:
+    def _handle_click_dialog_state(
+        self,
+        img: npt.NDArray[np.uint8],
+        iteration: int,
+    ) -> bool:
         """
         Handle click dialog detection state.
 
@@ -253,7 +272,7 @@ class Scanner:
             self._update_status()
             return True
 
-        click_detection = self.button_detector.detect(
+        click_detection: Optional[DetectionResult] = self.button_detector.detect(
             img, ButtonType.CLICK,
             min_matches=6,
             ratio=self.config.ratio_threshold
@@ -283,9 +302,9 @@ class Scanner:
         self.status.state = ScanState.WAITING_FOR_VORTEX if self.config.vortex else ScanState.WAITING_FOR_WEB
         self._update_status()
         
-        vortex_found = False
-        web_clicked = False
-        iteration = 0
+        vortex_found: bool = False
+        web_clicked: bool = False
+        iteration: int = 0
 
         try:
             while True:

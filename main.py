@@ -4,51 +4,16 @@ NexusAutoDL - Automated Nexusmods downloader.
 """
 from __future__ import annotations
 
-import sys
 from typing import Optional
 
 import click
-from loguru import logger
 
 from app import run as run_app
 from models import AppConfig, BrowserType
+from utils.logger import configure_logging, get_logger
 from utils.platform import IS_WINDOWS
 
-
-def setup_logging(verbose: bool) -> None:
-    """
-    Configure loguru logging.
-
-    Args:
-        verbose: Enable verbose logging
-    """
-    # Remove default handler
-    logger.remove()
-    
-    # Add file handler
-    logger.add(
-        "nexus_autodl.log",
-        rotation="10 MB",
-        retention="7 days",
-        level="DEBUG" if verbose else "INFO",
-        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {message}"
-    )
-    
-    # Add console handler with nice formatting
-    if verbose:
-        logger.add(
-            sys.stderr,
-            level="DEBUG",
-            format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
-            colorize=True
-        )
-    else:
-        logger.add(
-            sys.stderr,
-            level="INFO",
-            format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
-            colorize=True
-        )
+logger = get_logger(__name__)
 
 
 @click.command()
@@ -140,12 +105,11 @@ def main(
     
     Use --simulate to test without Windows or actual button detection.
     """
-    # Setup logging first
-    setup_logging(verbose)
+    configure_logging(verbose)
     
     # Validate arguments
-    effective_simulation = simulate or not IS_WINDOWS
-    host_supports_windows_features = IS_WINDOWS or simulate
+    effective_simulation: bool = simulate or not IS_WINDOWS
+    host_supports_windows_features: bool = IS_WINDOWS or simulate
     if browser and not vortex and not effective_simulation:
         raise click.UsageError("--browser requires --vortex to be enabled")
     if vortex and not host_supports_windows_features:

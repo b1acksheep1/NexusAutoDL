@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from loguru import logger
 
-from models import AppConfig
+from models import AppConfig, Monitor
 from utils.platform import IS_WINDOWS
 
 
@@ -17,12 +17,12 @@ def run(config: AppConfig, simulate: bool) -> None:
         config: Application configuration
         simulate: Force simulation mode even on Windows
     """
-    run_in_simulation = simulate or not IS_WINDOWS
+    run_in_simulation: bool = simulate or not IS_WINDOWS
 
     if run_in_simulation:
         from utils.simulator import SimulatedScanner as Scanner, get_simulated_monitors
 
-        monitors = get_simulated_monitors()
+        monitors: list[Monitor] = get_simulated_monitors()
         logger.warning("⚠️  SIMULATION MODE - No actual clicking will occur")
         logger.info(f"📺 Simulating {len(monitors)} monitor(s)")
         scanner = Scanner(config)
@@ -30,7 +30,7 @@ def run(config: AppConfig, simulate: bool) -> None:
         from services.window_manager import WindowManager
         from services.scanner import Scanner
 
-        monitors = WindowManager.get_all_monitors()
+        monitors: list[Monitor] = WindowManager.get_all_monitors()
         logger.info(f"📺 Detected {len(monitors)} monitor(s)")
         scanner = Scanner(config, monitors)
 
