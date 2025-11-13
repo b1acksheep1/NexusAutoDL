@@ -1,59 +1,414 @@
-# NexusAutoDL
-This tool is designed for automating the process of downloading mods from [Nexusmods](https://www.nexusmods.com/), without being a premium member. It is designed with mod managers such as [Portmod](https://gitlab.com/portmod/portmod) and [Wabbajack](https://www.wabbajack.org/). It also contains an integration for Nexusmods own mod manager, [Vortex](https://www.nexusmods.com/about/vortex/), which contrary to the affore mentioned, does not automatically open the mods download page but instead forces users to suffer through another click. This tool is designed to automatically click through a download list and download all of the contained mods without user intervention.
+<div align="center">
 
-# Features 
-This tool offers a plethora of different features. It is designed to work with multiple screens and even has a browser integration. If you’re working with multiple monitors and are also using Vortex, this tool has the ability to open and move your primary browser and your Vortex instance, so that you can start downloading right away. In addition, this tool offers Interruption Detection. As Vortex sometimes throws errors or otherwise asks the user for input. These interruptions will be detected and circumvented.
+# 🚀 NexusAutoDL
 
-# Prerequisites
-First you will need to have Python 3.9 installed.
+### Automated Download Assistant for Nexus Mods
 
-Then when running the script either on one monitor, or with --force-primary enabled, as well as --vortex enabled, you will need to make sure that both the Vortex Mod Manager window and your Browser window are visible at the same time.
+[![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Windows-lightgrey.svg)]()
 
+*Streamline your modding workflow by automating download button clicks on Nexus Mods*
 
-# Running the Script
-Clone this repository:
+[Features](#-features) • [Installation](#-installation) • [Usage](#-usage) • [Configuration](#-configuration) • [Troubleshooting](#-troubleshooting)
 
-`git clone https://github.com/jaylann/NexusAutoDL`
-
-Or manually download the repository.
-
-Then go into the directory you cloned/downloaded to.
-
-`cd NexusAutoDL`
-
-Install all necessary packages.
-
-`pip install -r requirements.txt`
-
-Run python script with or without arguments.
-
-Windows:
-`python main.py <arguments>`
-
-MacOS/Linux:
-`python3 main.py <arguments>`
-
-
-
-# Command Line Options
-- `--browser <browserName>: selects browser to open and move to work
-with Vortex. Can only be used in combination with --vortex. Currently
-supported browsers: “chrome”, “firefox”`
-- `--vortex: specifies use with Vortex mod manager`
-- `--verbose: prints verbose output`
-- `--force-primary: forces a system with multiple monitors to only be scanned on it’s primary display`
-
-# Demo
-https://user-images.githubusercontent.com/61842101/202874471-d5700912-16fd-4b7e-ab3f-0b97d05f6d9e.mp4
-
-# Credit
-Credit goes to [nexus-autodl](https://github.com/parsiad/nexus-autodl) for inspiring this project.
-
-# Disclaimer
-Nexusmods TOS state that using an automated program to download mods is prohibited. By using this software you are doing so at your own risk. The Author is not responsible for any kind of consequences and damages that might occur by using this program.
+</div>
 
 ---
-<p align="center">
-  Made with ❤️ by <a href="https://lanfermann.dev">Justin Lanfermann</a>
-</p>
 
+## ⚠️ Important Notice
+
+> **Disclaimer**: Automating interactions with Nexus Mods is against their Terms of Service. This tool is provided for educational purposes only. Use at your own risk and responsibility.
+
+---
+
+## 📖 Overview
+
+**NexusAutoDL** automates the "Download" / "Download with Vortex" flow on [Nexus Mods](https://www.nexusmods.com/). It watches one or more monitors, detects various download buttons (legacy and "New" layouts), and clicks through dialogs so you can walk away while your Vortex or browser download queue drains.
+
+### 🎯 Features
+
+- **🖥️ Multi-Monitor Support** - Screen capture across all monitors or constrain to primary display with `--force-primary`
+- **🎮 Vortex Integration** - Automatic window positioning and popup handling for Vortex Mod Manager
+- **🌐 Browser Support** - Works with Chrome and Firefox browsers
+- **🔍 Smart Detection** - SIFT-based computer vision for detecting both legacy and modern Nexus Mods UI buttons
+- **📦 Wabbajack Support** - Detects and handles Wabbajack download buttons
+- **🐛 Debug Mode** - Save annotated screenshots with bounding boxes to diagnose detection issues
+- **⚙️ Customizable Detection** - Fine-tune SIFT matching thresholds and timing parameters
+
+---
+
+## 💻 System Requirements
+
+### For Full Automation (Production)
+- **Python**: 3.9 or newer
+- **Operating System**: Windows (requires `pywin32` for window management)
+- **Display**: Visible Vortex and browser windows (not minimized)
+
+---
+
+## 🔧 Installation
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/jaylann/NexusAutoDL.git
+cd NexusAutoDL
+```
+
+### 2. Create Virtual Environment (Recommended)
+
+**Windows:**
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+### 3. Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Verify Installation
+
+```bash
+python validate.py
+```
+
+This validates that:
+- All modules import correctly
+- Required button template assets exist
+- Pydantic models are properly configured
+
+---
+
+## 🚀 Usage
+
+### Quick Start
+
+#### Basic Usage (Windows Only)
+Start monitoring for Website and Wabbajack download buttons only (no Vortex integration):
+
+```bash
+python main.py
+```
+
+**Note:** Without `--vortex`, the tool only detects Website and Wabbajack download buttons. It won't look for Vortex buttons or handle Vortex dialogs.
+
+#### With Vortex Mod Manager
+Enable Vortex integration with Chrome:
+
+```bash
+python main.py --vortex --browser chrome
+```
+
+#### Full Setup with Window Positioning
+Automatically position windows and start scanning:
+
+```bash
+python main.py --vortex --browser chrome --window-title "Nexus Mods" --force-primary
+```
+
+### Common Usage Scenarios
+
+<details>
+<summary><b>Scenario 1: Basic Vortex + Browser (Primary Monitor Only)</b></summary>
+
+```bash
+python main.py --vortex --browser chrome --force-primary
+```
+
+**What it does:**
+- Positions Vortex and Chrome windows
+- Scans primary monitor only
+- Handles modern green download buttons
+- Clicks through Vortex dialogs automatically
+
+**Best for:** Clean single-monitor setups
+
+</details>
+
+<details>
+<summary><b>Scenario 2: Legacy Nexus Mods Interface</b></summary>
+
+```bash
+python main.py --vortex --browser firefox --legacy
+```
+
+**What it does:**
+- Uses legacy button templates
+- Handles "Staging" and "Understood" dialog buttons
+- Works with older Nexus Mods layout
+- Compatible with Firefox
+
+**Best for:** Users on older Nexus Mods UI or with legacy template preferences
+
+</details>
+
+<details>
+<summary><b>Scenario 3: Wabbajack Download Automation</b></summary>
+
+```bash
+python main.py --window-title "Wabbajack" --force-primary
+```
+
+**What it does:**
+- Brings Wabbajack window to foreground
+- Detects Wabbajack-specific download buttons
+- Monitors primary display
+- Handles Wabbajack download flow
+
+**Best for:** Wabbajack modlist installations
+
+</details>
+
+<details>
+<summary><b>Scenario 4: Direct Browser Downloads (No Vortex)</b></summary>
+
+```bash
+python main.py --force-primary
+```
+
+**What it does:**
+- Detects Website and Wabbajack download buttons only
+- No Vortex integration (direct browser downloads)
+- Monitors primary display
+- Simpler workflow for non-Vortex users
+
+**Best for:** Users downloading mods directly through browser without Vortex, or Wabbajack installations
+
+</details>
+
+<details>
+<summary><b>Scenario 5: Debug Mode for Troubleshooting</b></summary>
+
+```bash
+python main.py --vortex --browser chrome --debug-frame-dir ./debug_frames --verbose
+```
+
+**What it does:**
+- Saves every detection frame as PNG
+- Draws bounding boxes around detected buttons
+- Prints detailed state machine logs
+- Helps diagnose false positives/negatives
+
+**Best for:** Debugging detection issues or multi-monitor setups
+
+</details>
+
+<details>
+<summary><b>Scenario 6: Fine-Tuned Detection Settings</b></summary>
+
+```bash
+python main.py --min-matches 12 --ratio 0.70 --click-delay 3.0
+```
+
+**What it does:**
+- Requires 12 SIFT feature matches (stricter)
+- Uses 0.70 Lowe ratio threshold
+- Waits 3 seconds between scan iterations
+- Reduces false positives
+
+**Best for:** High-accuracy requirements or avoiding misclicks
+
+</details>
+
+<details>
+<summary><b>Scenario 7: Multi-Monitor Full Desktop Scan</b></summary>
+
+```bash
+python main.py --vortex --browser chrome
+```
+
+**What it does:**
+- Captures entire virtual desktop (all monitors)
+- Detects buttons anywhere on screen
+- Positions windows automatically
+
+**Best for:** Multi-monitor setups where windows may be on any display
+
+</details>
+
+---
+
+## ⚙️ Configuration
+
+### Command-Line Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--browser` | choice | None | Browser to position: `chrome` or `firefox` (requires `--vortex`) |
+| `--vortex` | flag | False | Enable Vortex Mod Manager integration (detects Vortex buttons, handles dialogs, manages windows). Without this, only Website and Wabbajack buttons are detected. |
+| `--legacy` | flag | False | Use legacy button templates for old Nexus Mods UI |
+| `--verbose` | flag | False | Enable detailed debug logging to console |
+| `--force-primary` | flag | False | Scan primary monitor only (ignore secondary displays) |
+| `--window-title` | text | None | Move window containing this text to foreground before scanning |
+| `--min-matches` | int | 8 | Minimum SIFT feature matches required for button detection |
+| `--ratio` | float | 0.75 | Lowe ratio test threshold for SIFT matching (0.0-1.0) |
+| `--click-delay` | float | 2.0 | Seconds to wait between scan loop iterations |
+| `--simulate` | flag | False | Run in simulation mode without actual clicking (safe mode) |
+| `--debug-frame-dir` | path | None | Directory path to save annotated debug screenshots |
+
+### Get Complete Help
+
+```bash
+python main.py --help
+```
+
+## 🐛 Troubleshooting
+
+### Common Issues & Solutions
+
+<details>
+<summary><b>Problem: No buttons detected</b></summary>
+
+**Possible Causes:**
+- Windows are minimized or occluded
+- Wrong button templates for your Nexus Mods UI version
+- Detection threshold too strict
+
+**Solutions:**
+1. Ensure browser and Vortex windows are **visible and not minimized**
+2. Try lowering `--min-matches` threshold:
+   ```bash
+   python main.py --min-matches 5
+   ```
+3. Check if you need `--legacy` flag for old Nexus Mods UI
+4. Enable debug mode to see what's being detected:
+   ```bash
+   python main.py --debug-frame-dir ./debug --verbose
+   ```
+5. Verify windows are on the monitor being scanned (try `--force-primary`)
+
+</details>
+
+<details>
+<summary><b>Problem: False positives (clicking wrong things)</b></summary>
+
+**Possible Causes:**
+- Detection threshold too lenient
+- Similar UI elements matching templates
+- Multiple monitors with ambiguous content
+
+**Solutions:**
+1. Increase strictness with `--min-matches`:
+   ```bash
+   python main.py --min-matches 12
+   ```
+2. Lower the ratio threshold:
+   ```bash
+   python main.py --ratio 0.65
+   ```
+3. Use `--force-primary` to limit scan area
+4. Review debug frames to identify false matches:
+   ```bash
+   python main.py --debug-frame-dir ./debug
+   ```
+
+</details>
+
+<details>
+<summary><b>Problem: "Platform not supported" or pywin32 errors</b></summary>
+
+**Cause:** Full automation requires Windows with `pywin32`
+
+**Solutions:**
+- **On Windows:** Ensure `pywin32` is installed:
+  ```bash
+  pip install pywin32
+  ```
+- **On macOS/Linux:** Use simulation mode for testing:
+  ```bash
+  python main.py --simulate
+  ```
+- **Alternative:** Run in a Windows VM or container
+
+</details>
+
+<details>
+<summary><b>Problem: Import errors or missing dependencies</b></summary>
+
+**Solutions:**
+1. Reinstall all dependencies:
+   ```bash
+   pip install -r requirements.txt --force-reinstall
+   ```
+2. Verify Python version (3.9+ required):
+   ```bash
+   python --version
+   ```
+3. Check for missing packages:
+   ```bash
+   python validate.py
+   ```
+4. Ensure virtual environment is activated
+
+</details>
+
+<details>
+<summary><b>Problem: Window positioning not working</b></summary>
+
+**Possible Causes:**
+- Windows not running or title mismatch
+- Fullscreen mode interfering
+- Multi-monitor confusion
+
+**Solutions:**
+1. Manually position windows before starting NexusAutoDL
+2. Use exact window title substring with `--window-title`:
+   ```bash
+   python main.py --window-title "Nexus Mods - Google Chrome"
+   ```
+3. Ensure windows are in **windowed mode** (not fullscreen)
+4. On multi-monitor setups, manually move windows to primary display
+5. Check window manager logs with `--verbose`
+
+</details>
+
+<details>
+<summary><b>Problem: Buttons detected but clicks miss target</b></summary>
+
+**Possible Causes:**
+- DPI scaling issues on Windows
+- Window moved between detection and click
+- Incorrect coordinate transformation
+
+**Solutions:**
+1. Disable Windows DPI scaling for Python:
+   - Right-click `python.exe` → Properties → Compatibility
+   - Check "Override high DPI scaling behavior"
+2. Increase `--click-delay` to ensure pages load:
+   ```bash
+   python main.py --click-delay 3.0
+   ```
+3. Keep windows stationary during operation
+4. Report issue with debug frames
+
+</details>
+
+---
+
+## 🙏 Credits
+
+- **Original Inspiration:** [nexus-autodl](https://github.com/parsiad/nexus-autodl) by parsiad
+- **Community:** Thanks to the modding community for testing, templates, and feedback
+- **Contributors:** All who have contributed code, bug reports, and ideas
+
+---
+
+## 🎥 Demo
+
+Watch NexusAutoDL in action (Old but same principle):
+
+https://user-images.githubusercontent.com/61842101/202874471-d5700912-16fd-4b7e-ab3f-0b97d05f6d9e.mp4
+
+---
+
+<div align="center">
+
+### ⭐ If you find this tool useful, please star the repo!
+
+**Made with ❤️ by [Justin Lanfermann](https://lanfermann.dev)**
+
+</div>
