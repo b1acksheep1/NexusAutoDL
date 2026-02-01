@@ -1,2 +1,26 @@
 .idea/
 .venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+*.swp
+*.swo
+
+# Debug outputs
+debug_screenshots/
+
+# Logs
+*.log
+logs/
