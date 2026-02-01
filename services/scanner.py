@@ -229,7 +229,7 @@ class Scanner:
             detection: Optional[DetectionResult] = self.button_detector.detect(
                 img,
                 button_type,
-                min_matches=6,
+                min_matches=8,  # Same as Vortex, homography validation prevents false positives
                 ratio=self.config.ratio_threshold,
             )
 

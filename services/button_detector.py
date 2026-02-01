@@ -96,24 +96,30 @@ class ButtonDetector:
     def _compute_descriptors(self) -> None:
         """Compute SIFT descriptors for all assets."""
 
-        def compute_desc(
+        def compute_desc_and_kps(
             img: npt.NDArray[np.uint8],
-        ) -> Optional[npt.NDArray[np.float32]]:
+        ) -> tuple[Optional[npt.NDArray[np.float32]], Optional[list[cv2.KeyPoint]]]:
             gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-            _, desc = self.sift.detectAndCompute(gray, mask=None)
-            return desc
+            kps, desc = self.sift.detectAndCompute(gray, mask=None)
+            return desc, kps
 
-        self.assets.vortex_desc = compute_desc(self.assets.vortex_img)
+        self.assets.vortex_desc, self.vortex_kps = compute_desc_and_kps(self.assets.vortex_img)
         if self.assets.vortex_new_img is not None:
-            self.assets.vortex_new_desc = compute_desc(self.assets.vortex_new_img)
+            self.assets.vortex_new_desc, self.vortex_new_kps = compute_desc_and_kps(self.assets.vortex_new_img)
+            logger.debug(f"Vortex template size: {self.assets.vortex_new_img.shape[1]}x{self.assets.vortex_new_img.shape[0]}")
+        else:
+            self.vortex_new_kps = None
 
-        self.assets.web_desc = compute_desc(self.assets.web_img)
+        self.assets.web_desc, self.web_kps = compute_desc_and_kps(self.assets.web_img)
         if self.assets.web_new_img is not None:
-            self.assets.web_new_desc = compute_desc(self.assets.web_new_img)
-        self.assets.wabbajack_desc = compute_desc(self.assets.wabbajack_img)
-        self.assets.click_desc = compute_desc(self.assets.click_img)
-        self.assets.understood_desc = compute_desc(self.assets.understood_img)
-        self.assets.staging_desc = compute_desc(self.assets.staging_img)
+            self.assets.web_new_desc, self.web_new_kps = compute_desc_and_kps(self.assets.web_new_img)
+            logger.debug(f"Website template size: {self.assets.web_new_img.shape[1]}x{self.assets.web_new_img.shape[0]}")
+        else:
+            self.web_new_kps = None
+        self.assets.wabbajack_desc, self.wabbajack_kps = compute_desc_and_kps(self.assets.wabbajack_img)
+        self.assets.click_desc, self.click_kps = compute_desc_and_kps(self.assets.click_img)
+        self.assets.understood_desc, self.understood_kps = compute_desc_and_kps(self.assets.understood_img)
+        self.assets.staging_desc, self.staging_kps = compute_desc_and_kps(self.assets.staging_img)
 
         logger.info("Computed descriptors for all assets")
 
@@ -139,8 +145,10 @@ class ButtonDetector:
         *,
         legacy_img: Optional[npt.NDArray[np.uint8]],
         legacy_desc: Optional[npt.NDArray[np.float32]],
+        legacy_kps: Optional[list[cv2.KeyPoint]],
         new_img: Optional[npt.NDArray[np.uint8]],
         new_desc: Optional[npt.NDArray[np.float32]],
+        new_kps: Optional[list[cv2.KeyPoint]],
     ) -> list[TemplateCandidate]:
         """Return template candidate for selected mode if available."""
         img: Optional[npt.NDArray[np.uint8]] = (
@@ -149,27 +157,32 @@ class ButtonDetector:
         desc: Optional[npt.NDArray[np.float32]] = (
             legacy_desc if self.use_legacy_buttons else new_desc
         )
-        candidate = self._make_candidate(img, desc)
+        kps: Optional[list[cv2.KeyPoint]] = (
+            legacy_kps if self.use_legacy_buttons else new_kps
+        )
+        candidate = self._make_candidate(img, desc, kps)
         return [candidate] if candidate else []
 
     def _single_candidate(
         self,
         img: Optional[npt.NDArray[np.uint8]],
         desc: Optional[npt.NDArray[np.float32]],
+        kps: Optional[list[cv2.KeyPoint]] = None,
     ) -> list[TemplateCandidate]:
         """Return a single template candidate if descriptors exist."""
-        candidate = self._make_candidate(img, desc)
+        candidate = self._make_candidate(img, desc, kps)
         return [candidate] if candidate else []
 
     def _make_candidate(
         self,
         img: Optional[npt.NDArray[np.uint8]],
         desc: Optional[npt.NDArray[np.float32]],
+        kps: Optional[list[cv2.KeyPoint]] = None,
     ) -> Optional[TemplateCandidate]:
         if img is None or desc is None:
             return None
         height, width = img.shape[:2]
-        return TemplateCandidate(desc=desc, width=int(width), height=int(height))
+        return TemplateCandidate(desc=desc, width=int(width), height=int(height), keypoints=kps)
 
     def _match_template(
         self,
@@ -181,6 +194,7 @@ class ButtonDetector:
         ratio: float,
         offset_x: int,
         offset_y: int,
+        template_kps: Optional[list[cv2.KeyPoint]] = None,
     ) -> Optional[DetectionResult]:
         """Run descriptor matching for a single template."""
         matches: list[list[cv2.DMatch]] = self.matcher.knnMatch(template.desc, des, k=2)
@@ -198,16 +212,50 @@ class ButtonDetector:
             )
             return None
 
-        pts: npt.NDArray[np.float32] = np.float32(
+        # Get matched keypoint locations in the scene
+        scene_pts: npt.NDArray[np.float32] = np.float32(
             [kps[m.trainIdx].pt for m in good_matches]
         )
-        cx, cy = np.mean(pts, axis=0)
+        
+        # Homography validation: ensure geometric consistency
+        if len(good_matches) >= 4 and template_kps is not None:
+            template_pts: npt.NDArray[np.float32] = np.float32(
+                [template_kps[m.queryIdx].pt for m in good_matches]
+            )
+            
+            # Find homography
+            H, mask = cv2.findHomography(template_pts, scene_pts, cv2.RANSAC, 5.0)
+            
+            if H is None or mask is None:
+                logger.debug(f"{button_type}: failed to compute homography")
+                return None
+            
+            # Count inliers (matches that fit the homography)
+            inliers = np.sum(mask)
+            inlier_ratio = inliers / len(good_matches)
+            
+            # Require at least 30% of matches to be geometrically consistent
+            # Real buttons often have lower ratios due to occlusion, scaling, and partial views
+            if inlier_ratio < 0.3:
+                logger.debug(
+                    f"{button_type}: low homography inlier ratio {inlier_ratio:.2f} "
+                    f"({inliers}/{len(good_matches)} inliers)"
+                )
+                return None
+            
+            # Use only inlier points for centroid calculation
+            scene_pts = scene_pts[mask.ravel() == 1]
+            logger.debug(
+                f"{button_type}: homography validation passed ({inliers}/{len(good_matches)} inliers)"
+            )
+        
+        cx, cy = np.mean(scene_pts, axis=0)
         cx += offset_x
         cy += offset_y
         confidence = min(len(good_matches) / (min_matches * 2), 1.0)
 
         logger.info(
-            f"Detected {button_type} at ({int(cx)}, {int(cy)}) "
+            f"Detected {button_type} at image coords ({int(cx)}, {int(cy)}) "
             f"with {len(good_matches)} matches (confidence: {confidence:.2f})"
         )
 
@@ -247,26 +295,30 @@ class ButtonDetector:
             ButtonType.VORTEX: self._mode_specific_candidates(
                 legacy_img=self.assets.vortex_img,
                 legacy_desc=self.assets.vortex_desc,
+                legacy_kps=self.vortex_kps,
                 new_img=self.assets.vortex_new_img,
                 new_desc=self.assets.vortex_new_desc,
+                new_kps=self.vortex_new_kps,
             ),
             ButtonType.WEBSITE: self._mode_specific_candidates(
                 legacy_img=self.assets.web_img,
                 legacy_desc=self.assets.web_desc,
+                legacy_kps=self.web_kps,
                 new_img=self.assets.web_new_img,
                 new_desc=self.assets.web_new_desc,
+                new_kps=self.web_new_kps,
             ),
             ButtonType.WABBAJACK: self._single_candidate(
-                self.assets.wabbajack_img, self.assets.wabbajack_desc
+                self.assets.wabbajack_img, self.assets.wabbajack_desc, self.wabbajack_kps
             ),
             ButtonType.CLICK: self._single_candidate(
-                self.assets.click_img, self.assets.click_desc
+                self.assets.click_img, self.assets.click_desc, self.click_kps
             ),
             ButtonType.UNDERSTOOD: self._single_candidate(
-                self.assets.understood_img, self.assets.understood_desc
+                self.assets.understood_img, self.assets.understood_desc, self.understood_kps
             ),
             ButtonType.STAGING: self._single_candidate(
-                self.assets.staging_img, self.assets.staging_desc
+                self.assets.staging_img, self.assets.staging_desc, self.staging_kps
             ),
         }
 
@@ -312,6 +364,7 @@ class ButtonDetector:
                 ratio,
                 offset_x,
                 offset_y,
+                template_kps=template.keypoints,
             )
             if result and (
                 best_result is None or result.num_matches > best_result.num_matches

@@ -68,6 +68,12 @@ class DebugRecorder:
 
         color: Tuple[int, int, int] = (0, 255, 0)
         cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
+        
+        # Draw click point (red circle)
+        click_color: Tuple[int, int, int] = (255, 0, 0)
+        cv2.circle(image, (int(detection.x), int(detection.y)), 10, click_color, -1)
+        cv2.circle(image, (int(detection.x), int(detection.y)), 12, (255, 255, 255), 2)
+        
         text: str = (
             f"{label} | {detection.button_type.value} | "
             f"conf={detection.confidence:.2f} | matches={detection.num_matches}"
